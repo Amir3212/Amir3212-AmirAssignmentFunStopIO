@@ -34,6 +34,7 @@ class ProductFeedViewModelTest {
         every { productRepository.observeCategories() } returns flowOf(listOf("beauty"))
         every { cartRepository.observeItemCount() } returns flowOf(0)
         every { cartRepository.observeCart() } returns flowOf(emptyList())
+        coEvery { productRepository.refreshProducts() } returns Result.success(Unit)
     }
 
     @After
@@ -51,10 +52,36 @@ class ProductFeedViewModelTest {
 
     @Test
     fun refreshProducts_success_clearsRefreshing() = runTest {
-        coEvery { productRepository.refreshProducts() } returns Result.success(Unit)
         val viewModel = ProductFeedViewModel(productRepository, analyticsRepository, cartRepository)
         viewModel.refresh()
         assertEquals(false, viewModel.uiState.value.isRefreshing)
+    }
+
+    @Test
+    fun init_withoutCache_invokesCatalogRefresh() = runTest {
+        every { productRepository.observeHasCachedProducts() } returns flowOf(false)
+        ProductFeedViewModel(productRepository, analyticsRepository, cartRepository)
+        coVerify { productRepository.refreshProducts() }
+    }
+
+    @Test
+    fun init_withoutCache_refreshFails_setsFailedState() = runTest {
+        every { productRepository.observeHasCachedProducts() } returns flowOf(false)
+        coEvery { productRepository.refreshProducts() } returns Result.failure(Exception("offline"))
+        val viewModel = ProductFeedViewModel(productRepository, analyticsRepository, cartRepository)
+        assertEquals(CatalogSyncState.Failed, viewModel.uiState.value.catalogSyncState)
+        assertEquals(
+            ProductFeedViewModel.CATALOG_LOAD_ERROR_MESSAGE,
+            viewModel.uiState.value.errorMessage,
+        )
+    }
+
+    @Test
+    fun init_withoutCache_refreshSucceeds_setsSyncedState() = runTest {
+        every { productRepository.observeHasCachedProducts() } returns flowOf(false)
+        coEvery { productRepository.refreshProducts() } returns Result.success(Unit)
+        val viewModel = ProductFeedViewModel(productRepository, analyticsRepository, cartRepository)
+        assertEquals(CatalogSyncState.Synced, viewModel.uiState.value.catalogSyncState)
     }
 
     @Test

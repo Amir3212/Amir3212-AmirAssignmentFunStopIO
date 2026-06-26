@@ -6,7 +6,10 @@ import android.widget.Toast
 
 import androidx.compose.foundation.background
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+
+import androidx.compose.foundation.layout.Column
 
 import androidx.compose.foundation.layout.Row
 
@@ -36,6 +39,7 @@ import androidx.compose.material.icons.outlined.Notifications
 
 import androidx.compose.material.icons.outlined.Search
 
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -128,6 +132,8 @@ private const val CONTENT_TYPE_PRODUCT = "product"
 
 private const val CONTENT_TYPE_APPEND = "append"
 
+private const val CONTENT_TYPE_ERROR = "error"
+
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,9 +212,17 @@ fun ProductFeedScreen(
 
                 flashPoolJoined = uiState.flashPoolJoined,
 
-                showShimmer = uiState.showShimmer,
+                catalogSyncState = uiState.catalogSyncState,
 
                 errorMessage = uiState.errorMessage,
+
+                onRetry = {
+
+                    actions.refresh()
+
+                    pagingItems.retry()
+
+                },
 
                 actions = actions,
 
@@ -266,13 +280,11 @@ private fun ProductFeedEffects(
 
     LaunchedEffect(pagingItems.loadState.refresh) {
 
-        when (val state = pagingItems.loadState.refresh) {
+        val state = pagingItems.loadState.refresh
 
-            is LoadState.Error -> onPagingError(state.error.message)
+        if (state is LoadState.Error) {
 
-            is LoadState.NotLoading -> onPagingError(null)
-
-            else -> Unit
+            onPagingError(state.error.message)
 
         }
 
@@ -322,9 +334,11 @@ private fun ProductFeedList(
 
     flashPoolJoined: Boolean,
 
-    showShimmer: Boolean,
+    catalogSyncState: CatalogSyncState,
 
     errorMessage: String?,
+
+    onRetry: () -> Unit,
 
     actions: ProductFeedActions,
 
@@ -349,6 +363,24 @@ private fun ProductFeedList(
     }
 
     val showAppendLoader = pagingItems.loadState.append is LoadState.Loading
+
+    val refreshLoadState = pagingItems.loadState.refresh
+
+    val showCatalogShimmer = pagingItems.itemCount == 0 && (
+
+        catalogSyncState == CatalogSyncState.Syncing ||
+
+            refreshLoadState is LoadState.Loading
+
+        )
+
+    val showCatalogError = pagingItems.itemCount == 0 && (
+
+        catalogSyncState == CatalogSyncState.Failed ||
+
+            refreshLoadState is LoadState.Error
+
+        )
 
 
 
@@ -408,7 +440,7 @@ private fun ProductFeedList(
 
             }
 
-            if (showShimmer && pagingItems.itemCount == 0) {
+            if (showCatalogShimmer) {
 
                 items(4, contentType = { CONTENT_TYPE_SHIMMER }) {
 
@@ -416,7 +448,29 @@ private fun ProductFeedList(
 
                 }
 
-            } else if (pagingItems.itemCount == 0 && pagingItems.loadState.refresh is LoadState.NotLoading) {
+            } else if (showCatalogError) {
+
+                item(contentType = CONTENT_TYPE_ERROR) {
+
+                    FeedLoadError(
+
+                        message = errorMessage ?: ProductFeedViewModel.CATALOG_LOAD_ERROR_MESSAGE,
+
+                        onRetry = onRetry,
+
+                    )
+
+                }
+
+            } else if (
+
+                pagingItems.itemCount == 0 &&
+
+                    refreshLoadState is LoadState.NotLoading &&
+
+                    catalogSyncState == CatalogSyncState.Synced
+
+            ) {
 
                 item(contentType = CONTENT_TYPE_EMPTY) {
 
@@ -434,7 +488,7 @@ private fun ProductFeedList(
 
                         Text(
 
-                            text = errorMessage ?: "No products in this category.",
+                            text = "No products in this category.",
 
                             style = MaterialTheme.typography.bodyLarge,
 
@@ -444,7 +498,7 @@ private fun ProductFeedList(
 
                 }
 
-            } else {
+            } else if (pagingItems.itemCount > 0) {
 
                 items(
 
@@ -603,6 +657,52 @@ private fun FeedProductRow(
         onAddToCart = onAddToCart,
 
     )
+
+}
+
+
+
+@Composable
+
+private fun FeedLoadError(
+
+    message: String,
+
+    onRetry: () -> Unit,
+
+    modifier: Modifier = Modifier,
+
+) {
+
+    Column(
+
+        modifier = modifier
+
+            .fillMaxWidth()
+
+            .padding(32.dp),
+
+        horizontalAlignment = Alignment.CenterHorizontally,
+
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+
+    ) {
+
+        Text(
+
+            text = message,
+
+            style = MaterialTheme.typography.bodyLarge,
+
+        )
+
+        Button(onClick = onRetry) {
+
+            Text(text = "Retry")
+
+        }
+
+    }
 
 }
 

@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.AmirAssignment" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.AmirAssignment.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/amir_brand</item>
+        <item name="postSplashScreenTheme">@style/Theme.AmirAssignment</item>
+    </style>
 </resources>
